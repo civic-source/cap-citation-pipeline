@@ -1,0 +1,4 @@
+eyecite>=2.7.0
+datasets>=3.0.0
+polars>=1.0.0
+pyyaml>=6.0

@@ -1,13 +1,13 @@
 # CAP Citation Pipeline
 
-Extract USC (United States Code) statutory citations from [Caselaw Access Project](https://case.law/) opinions using [eyecite](https://github.com/freelawproject/eyecite).
+Extract case law citation data for U.S. Code sections from [CourtListener](https://www.courtlistener.com/) — no authentication required.
 
 ## What it does
 
-1. Downloads case opinions from CAP (via HuggingFace Parquet dataset)
-2. Extracts USC citations using eyecite (`get_citations()`)
-3. Maps citations to US Code sections (title + section)
-4. Generates YAML annotation sidecars for [us-code-tracker](https://github.com/civic-source/us-code-tracker)
+1. Queries CourtListener's public search API for each USC section
+2. Retrieves case metadata (name, court, date, URL)
+3. Generates YAML annotation sidecars for [us-code-tracker](https://github.com/civic-source/us-code-tracker)
+4. Annotations power the "Case Law" section on statute pages
 
 ## Quick start
 
@@ -15,8 +15,15 @@ Extract USC (United States Code) statutory citations from [Caselaw Access Projec
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python extract.py --sample 100    # Test with 100 opinions
-python extract.py --full          # Process all federal opinions
+
+# Test with 10 sample sections
+python extract.py --sample 10
+
+# Process all sections in a specific title
+python extract.py --repo /path/to/us-code --title 18
+
+# Process all sections (slow, ~8 hours for 60K sections)
+python extract.py --repo /path/to/us-code --full
 ```
 
 ## Output format
@@ -24,30 +31,29 @@ python extract.py --full          # Process all federal opinions
 ```yaml
 # annotations/title-18/section-111.yaml
 targetSection: "18 U.S.C. § 111"
-lastSyncedET: "2026-03-30T22:00:00-04:00"
+lastSyncedET: "2026-03-31T03:28:58+00:00"
+totalCases: 1298
 cases:
-  - caseName: "United States v. Smith"
-    citation: "500 U.S. 123 (2020)"
-    court: "SCOTUS"
-    date: "2020-06-15"
-    holdingSummary: "..."
-    sourceUrl: "https://case.law/..."
+  - caseName: "United States v. Mobley"
+    citation: "344 F. Supp. 3d 1089"
+    court: "District"
+    date: "2018-10-01"
+    sourceUrl: "https://www.courtlistener.com/opinion/7332965/..."
     impact: "interpretation"
 ```
 
-## Data sources
+## Data source
 
-- **CAP**: [free-law/Caselaw_Access_Project](https://huggingface.co/datasets/free-law/Caselaw_Access_Project) (6.7M cases, Parquet)
-- **eyecite**: v2.7.6 — validated for USC citations (100% precision, ~70% recall)
+**CourtListener** — public search API, no authentication required. Rate-limited at 0.5s between requests.
 
-## Validation results
+Top cited sections from our analysis:
 
-| Format | Detected |
-|--------|----------|
-| `18 U.S.C. § 111` | Yes |
-| `42 U.S.C. §§ 1983` | Yes (handles §§) |
-| `28 U.S.C. § 1332(a)` | Yes (pin cite) |
-| `15 U.S.C. § 78j(b)` | No (alphanumeric) |
+| Section | Cases |
+|---------|-------|
+| 42 U.S.C. § 1983 | 88,031 |
+| 42 U.S.C. § 2000e | 32,717 |
+| 28 U.S.C. § 1332 | 26,106 |
+| 18 U.S.C. § 922 | 15,800 |
 
 ## License
 

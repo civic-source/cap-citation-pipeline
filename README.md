@@ -31,15 +31,22 @@ python extract.py --repo /path/to/us-code --full
 ```yaml
 # annotations/title-18/section-111.yaml
 targetSection: "18 U.S.C. § 111"
-lastSyncedET: "2026-03-31T03:28:58+00:00"
+lastSyncedET: "2026-03-31T03:28:58Z"
 totalCases: 1298
 cases:
   - caseName: "United States v. Mobley"
     citation: "344 F. Supp. 3d 1089"
     court: "District"
     date: "2018-10-01"
+    holdingSummary: "Retrieval snippet from CourtListener search..."
+    retrievalExcerpt: "Retrieval snippet from CourtListener search..."
+    retrievalQuery: '"18 U.S.C. § 111"'
+    retrievedAt: "2026-03-31T03:28:58Z"
+    extractionState: "candidate"
+    editorialReview: "unreviewed"
+    versionAlignmentState: "unknown"
     sourceUrl: "https://www.courtlistener.com/opinion/7332965/..."
-    impact: "interpretation"
+    impact: "unverified_mention"
 ```
 
 ## Data source

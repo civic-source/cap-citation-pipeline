@@ -3,6 +3,8 @@
 Extract USC statutory citation data from CourtListener search API.
 
 No authentication required — uses public search endpoint.
+Implements USCT-002 (explicit source acquisition outcomes and prior-snapshot fallback)
+and USCT-004 (unreviewed search candidate provenance).
 
 Usage:
     python extract.py --sample 10     # Test with 10 sections
@@ -13,19 +15,25 @@ Usage:
 
 import argparse
 import json
+import math
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import yaml
 
 
 COURTLISTENER_SEARCH_URL = "https://www.courtlistener.com/api/rest/v4/search/"
 REQUEST_DELAY_S = 0.5  # Rate limit: 2 requests/second max
+RATE_LIMIT_WAIT_S = 10.0
+MAX_RATE_LIMIT_RETRIES = 3
+PAGE_SIZE = 20
+MAX_PAGES = 5
 USER_AGENT = "civic-source-us-code-tracker/1.0 (https://github.com/civic-source)"
 
 MAX_CASE_NAME_LENGTH = 500
@@ -45,46 +53,192 @@ def build_search_query(title: int, section: str) -> str:
     return f'"{title} U.S.C. § {section}"'
 
 
-def search_courtlistener(title: int, section: str, max_results: int = 10) -> dict:
-    """Search CourtListener for cases citing a USC section."""
+def _fetch_json_url(
+    url: str,
+    max_retries: int = MAX_RATE_LIMIT_RETRIES,
+    sleep_fn: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    """Fetch a single CourtListener URL with bounded 429 retry and structured outcome."""
+    attempt = 0
+    while True:
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        try:
+            resp = urllib.request.urlopen(req, timeout=15)
+            status_code = getattr(resp, "status", 200) or 200
+            raw_bytes = resp.read()
+            payload = json.loads(raw_bytes)
+            if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
+                return {
+                    "ok": False,
+                    "httpStatus": status_code,
+                    "failureKind": "malformed_payload",
+                    "errorMessage": "CourtListener response missing results array",
+                }
+            return {
+                "ok": True,
+                "httpStatus": status_code,
+                "payload": payload,
+            }
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < max_retries:
+                attempt += 1
+                print(f"  Rate limited (attempt {attempt}/{max_retries}), waiting {RATE_LIMIT_WAIT_S}s...")
+                sleep_fn(RATE_LIMIT_WAIT_S)
+                continue
+            failure_kind = "rate_limited" if e.code == 429 else "http_error"
+            return {
+                "ok": False,
+                "httpStatus": e.code,
+                "failureKind": failure_kind,
+                "errorMessage": f"HTTP {e.code}",
+            }
+        except json.JSONDecodeError as e:
+            return {
+                "ok": False,
+                "httpStatus": 200,
+                "failureKind": "malformed_payload",
+                "errorMessage": f"Malformed JSON: {e}",
+            }
+        except Exception as e:
+            msg = str(e)
+            failure_kind = "timeout" if "timed out" in msg.lower() or "timeout" in msg.lower() else "network_error"
+            return {
+                "ok": False,
+                "httpStatus": None,
+                "failureKind": failure_kind,
+                "errorMessage": msg,
+            }
+
+
+def search_courtlistener(
+    title: int,
+    section: str,
+    max_results: int = 10,
+    max_retries: int = MAX_RATE_LIMIT_RETRIES,
+    sleep_fn: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    """
+    Search CourtListener for cases citing a USC section.
+    Returns structured USCT-002 acquisition outcome metadata alongside `count` and `results`.
+    """
     query = build_search_query(title, section)
+    page_size = min(max(max_results, 1), PAGE_SIZE)
+    target_pages = min(max(1, math.ceil(max_results / page_size)), MAX_PAGES)
     params = urllib.parse.urlencode({
         "q": query,
         "type": "o",
         "format": "json",
-        "page_size": min(max_results, 20),
+        "page_size": page_size,
     })
-    url = f"{COURTLISTENER_SEARCH_URL}?{params}"
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    next_url: str | None = f"{COURTLISTENER_SEARCH_URL}?{params}"
 
-    try:
-        resp = urllib.request.urlopen(req, timeout=15)
-        return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        if e.code == 429:
-            print(f"  Rate limited, waiting 10s...")
-            time.sleep(10)
-            return search_courtlistener(title, section, max_results)
-        print(f"  HTTP {e.code} for {title} U.S.C. § {section}", file=sys.stderr)
-        return {"count": 0, "results": []}
-    except Exception as e:
-        print(f"  Error for {title} U.S.C. § {section}: {e}", file=sys.stderr)
-        return {"count": 0, "results": []}
+    collected: list[dict[str, Any]] = []
+    total_count = 0
+    completed_pages = 0
+    expected_pages = 1
+    last_http_status: int | None = 200
+
+    while next_url and completed_pages < target_pages and len(collected) < max_results:
+        page_res = _fetch_json_url(next_url, max_retries=max_retries, sleep_fn=sleep_fn)
+        last_http_status = page_res.get("httpStatus")
+        if not page_res.get("ok"):
+            if completed_pages > 0:
+                return {
+                    "status": "partial",
+                    "httpStatus": last_http_status,
+                    "failureKind": "pagination_incomplete",
+                    "errorMessage": page_res.get("errorMessage"),
+                    "completedPages": completed_pages,
+                    "expectedPages": max(expected_pages, completed_pages + 1),
+                    "count": total_count,
+                    "results": collected[:max_results],
+                }
+            print(
+                f"  Failure ({page_res.get('failureKind')}) for {title} U.S.C. § {section}: {page_res.get('errorMessage')}",
+                file=sys.stderr,
+            )
+            return {
+                "status": "failed",
+                "httpStatus": last_http_status,
+                "failureKind": page_res.get("failureKind"),
+                "errorMessage": page_res.get("errorMessage"),
+                "completedPages": 0,
+                "expectedPages": 1,
+                "count": 0,
+                "results": [],
+            }
+
+        payload = page_res["payload"]
+        completed_pages += 1
+        page_results = payload.get("results", [])
+        if completed_pages == 1:
+            raw_count = payload.get("count")
+            total_count = int(raw_count) if isinstance(raw_count, int) else len(page_results)
+            if total_count > 0:
+                expected_pages = min(target_pages, max(1, math.ceil(min(total_count, max_results) / page_size)))
+
+        for item in page_results:
+            if isinstance(item, dict):
+                collected.append(item)
+
+        raw_next = payload.get("next")
+        if isinstance(raw_next, str) and raw_next.strip():
+            next_url = raw_next.strip()
+        else:
+            next_url = None
+            break
+
+    if completed_pages < expected_pages:
+        return {
+            "status": "partial",
+            "httpStatus": last_http_status,
+            "failureKind": "pagination_incomplete",
+            "errorMessage": f"Completed {completed_pages} of {expected_pages} expected pages",
+            "completedPages": completed_pages,
+            "expectedPages": expected_pages,
+            "count": total_count,
+            "results": collected[:max_results],
+        }
+
+    status = "success-empty" if len(collected) == 0 else "success-nonempty"
+    return {
+        "status": status,
+        "httpStatus": last_http_status or 200,
+        "completedPages": completed_pages,
+        "expectedPages": expected_pages,
+        "count": total_count,
+        "results": collected[:max_results],
+    }
 
 
-def classify_court(court_name: str) -> str:
-    """Classify court name into SCOTUS/Appellate/District."""
+def classify_court(court_name: str, court_id: str | None = None) -> str:
+    """
+    Classify federal court identifier/name into SCOTUS/Appellate/District.
+    Restricts SCOTUS strictly to the Supreme Court of the United States so state
+    supreme courts are never misclassified as SCOTUS.
+    """
+    cid = (court_id or "").strip().lower()
+    if cid == "scotus":
+        return "SCOTUS"
+    if cid in ("cadc", "cafc") or (cid.startswith("ca") and cid[2:].isdigit()):
+        return "Appellate"
+
     if not court_name:
         return "District"
-    lower = court_name.lower()
-    if "supreme" in lower:
+    lower = court_name.strip().lower()
+    if (
+        lower == "scotus"
+        or "supreme court of the united states" in lower
+        or "u.s. supreme court" in lower
+        or "united states supreme court" in lower
+    ):
         return "SCOTUS"
-    if "circuit" in lower or "appeal" in lower:
+    if "circuit" in lower or "court of appeals" in lower or "appellate" in lower:
         return "Appellate"
     return "District"
 
 
-def build_case_annotation(result: dict, retrieval_query: str, retrieved_at: str) -> dict:
+def build_case_annotation(result: dict[str, Any], retrieval_query: str, retrieved_at: str) -> dict[str, Any]:
     """Build a USCT-004 / USCT-015 compliant candidate case annotation from a search hit."""
     citations = result.get("citation")
     first_citation = ""
@@ -105,7 +259,7 @@ def build_case_annotation(result: dict, retrieval_query: str, retrieved_at: str)
     return {
         "caseName": (result.get("caseName") or "Unknown")[:MAX_CASE_NAME_LENGTH],
         "citation": first_citation[:MAX_CITATION_LENGTH],
-        "court": classify_court(result.get("court") or ""),
+        "court": classify_court(result.get("court") or "", result.get("court_id")),
         "date": result.get("dateFiled") or "",
         # Legacy field retained for sidecar compatibility (USCT-004: search snippet, not holding)
         "holdingSummary": snippet,
@@ -120,24 +274,43 @@ def build_case_annotation(result: dict, retrieval_query: str, retrieved_at: str)
     }
 
 
+def _normalize_search_response(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize legacy `{count, results}` test doubles or structured outcomes into a canonical outcome dict."""
+    if "status" in raw:
+        return raw
+    results = raw.get("results", [])
+    count = raw.get("count", len(results))
+    status = "success-empty" if len(results) == 0 else "success-nonempty"
+    return {
+        "status": status,
+        "httpStatus": 200,
+        "completedPages": 1,
+        "expectedPages": 1,
+        "count": count,
+        "results": results,
+    }
+
+
 def process_sections(
     sections: list[tuple[int, str]],
     max_cases: int = 10,
-    search_fn: Callable[[int, str, int], dict] = search_courtlistener,
+    search_fn: Callable[[int, str, int], dict[str, Any]] = search_courtlistener,
     delay_s: float = REQUEST_DELAY_S,
-) -> dict[str, dict]:
-    """Process a list of (title, section) tuples and return annotation data."""
-    results = {}
+) -> dict[str, dict[str, Any]]:
+    """Process a list of (title, section) tuples and return annotation data with USCT-002 outcome metadata."""
+    results: dict[str, dict[str, Any]] = {}
     total = len(sections)
 
     for i, (title, section) in enumerate(sections):
         key = f"title-{title}/section-{section}"
         retrieval_query = build_search_query(title, section)
         retrieved_at = utc_now_iso()
-        data = search_fn(title, section, max_cases)
-        count = data.get("count", 0)
+        outcome = _normalize_search_response(search_fn(title, section, max_cases))
+        status = outcome.get("status", "failed")
+        count = int(outcome.get("count", 0) or 0)
+        raw_results = outcome.get("results", [])
 
-        if count == 0:
+        if status == "success-empty":
             if (i + 1) % 50 == 0:
                 print(f"  [{i+1}/{total}] No cases for {title} U.S.C. § {section}")
             if delay_s > 0:
@@ -146,15 +319,22 @@ def process_sections(
 
         cases = [
             build_case_annotation(r, retrieval_query, retrieved_at)
-            for r in data.get("results", [])
+            for r in raw_results
         ]
 
         results[key] = {
+            "status": status,
+            "observedAt": retrieved_at,
+            "httpStatus": outcome.get("httpStatus"),
+            "failureKind": outcome.get("failureKind"),
+            "errorMessage": outcome.get("errorMessage"),
+            "completedPages": outcome.get("completedPages", 1),
+            "expectedPages": outcome.get("expectedPages", 1),
             "totalCases": count,
             "cases": cases,
         }
 
-        print(f"  [{i+1}/{total}] {title} U.S.C. § {section}: {count} cases")
+        print(f"  [{i+1}/{total}] {title} U.S.C. § {section}: {count} cases ({status})")
         if delay_s > 0:
             time.sleep(delay_s)
 
@@ -164,7 +344,7 @@ def process_sections(
 def get_sections_from_repo(repo_path: str, title_filter: int | None = None) -> list[tuple[int, str]]:
     """Read section list from the us-code content-data repo."""
     statutes_dir = Path(repo_path) / "statutes"
-    sections = []
+    sections: list[tuple[int, str]] = []
 
     if not statutes_dir.exists():
         print(f"Statutes dir not found: {statutes_dir}", file=sys.stderr)
@@ -189,8 +369,12 @@ def get_sections_from_repo(repo_path: str, title_filter: int | None = None) -> l
     return sections
 
 
-def write_annotations(results: dict[str, dict], output_dir: Path) -> int:
-    """Write YAML annotation files."""
+def write_annotations(results: dict[str, dict[str, Any]], output_dir: Path) -> int:
+    """
+    Write YAML annotation files with USCT-002 fallback semantics:
+    if a refresh failed or returned empty partial results, preserve any existing
+    validated YAML sidecar on disk and record `retainedPriorSnapshot: true, isStale: true`.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     now = utc_now_iso()
     written = 0
@@ -205,23 +389,75 @@ def write_annotations(results: dict[str, dict], output_dir: Path) -> int:
 
         title_num = parts[0].replace("title-", "")
         section_num = parts[1].replace("section-", "")
+        section_file = title_dir / f"{parts[1]}.yaml"
+
+        status = data.get("status", "success-nonempty")
+        observed_at = data.get("observedAt") or now
+        cases = data.get("cases", [])
+
+        existing: dict[str, Any] | None = None
+        if section_file.exists():
+            try:
+                loaded = yaml.safe_load(section_file.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict) and isinstance(loaded.get("cases"), list):
+                    existing = loaded
+            except Exception:
+                existing = None
+
+        if status == "failed" or (status == "partial" and len(cases) == 0):
+            if existing is not None:
+                prior_synced = existing.get("lastSyncedET") or observed_at
+                refresh_status: dict[str, Any] = {
+                    "status": status,
+                    "observedAt": observed_at,
+                    "lastSuccessAt": prior_synced,
+                    "isStale": True,
+                    "retainedPriorSnapshot": True,
+                    "completedPages": data.get("completedPages", 0),
+                    "expectedPages": data.get("expectedPages", 1),
+                }
+                if data.get("failureKind"):
+                    refresh_status["failureKind"] = data["failureKind"]
+                if data.get("errorMessage"):
+                    refresh_status["errorMessage"] = data["errorMessage"]
+                existing["refreshStatus"] = refresh_status
+                with open(section_file, "w", encoding="utf-8") as f:
+                    yaml.dump(existing, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                written += 1
+            # Never overwrite or create an empty sidecar on failed acquisition
+            continue
+
+        is_stale = status != "success-nonempty" and status != "success-empty"
+        refresh_meta: dict[str, Any] = {
+            "status": status,
+            "observedAt": observed_at,
+            "lastSuccessAt": observed_at if not is_stale else (existing.get("lastSyncedET") if existing else observed_at),
+            "isStale": is_stale,
+            "retainedPriorSnapshot": False,
+            "completedPages": data.get("completedPages", 1),
+            "expectedPages": data.get("expectedPages", 1),
+        }
+        if data.get("failureKind"):
+            refresh_meta["failureKind"] = data["failureKind"]
+        if data.get("errorMessage"):
+            refresh_meta["errorMessage"] = data["errorMessage"]
 
         annotation = {
             "targetSection": f"{title_num} U.S.C. § {section_num}",
-            "lastSyncedET": now,
-            "totalCases": data["totalCases"],
-            "cases": data["cases"][:MAX_CASES_PER_SECTION],
+            "lastSyncedET": observed_at,
+            "totalCases": data.get("totalCases", len(cases)),
+            "refreshStatus": refresh_meta,
+            "cases": cases[:MAX_CASES_PER_SECTION],
         }
 
-        section_file = title_dir / f"{parts[1]}.yaml"
-        with open(section_file, "w") as f:
+        with open(section_file, "w", encoding="utf-8") as f:
             yaml.dump(annotation, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
         written += 1
 
     return written
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Extract USC citation data from CourtListener")
     parser.add_argument("--sample", type=int, help="Process N sample sections")
     parser.add_argument("--title", type=int, help="Process only this title number")
@@ -232,11 +468,9 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Run without writing YAML files")
     args = parser.parse_args()
 
-    # Get section list
     if args.repo:
         sections = get_sections_from_repo(args.repo, args.title)
     else:
-        # Default sample sections for testing
         sections = [
             (18, "111"), (18, "1001"), (18, "924"), (18, "1341"),
             (42, "1983"), (42, "1985"), (42, "2000e"),
@@ -262,11 +496,10 @@ def main():
             written = write_annotations(results, output_dir)
             print(f"\nWrote {written} annotation files to {output_dir}/")
 
-        # Top cited sections
         print("\nTop 10 most-cited sections:")
-        sorted_results = sorted(results.items(), key=lambda x: x[1]["totalCases"], reverse=True)
+        sorted_results = sorted(results.items(), key=lambda x: x[1].get("totalCases", 0), reverse=True)
         for key, data in sorted_results[:10]:
-            print(f"  {key}: {data['totalCases']:,} cases")
+            print(f"  {key}: {data.get('totalCases', 0):,} cases ({data.get('status', 'unknown')})")
     else:
         print("No results found.")
 

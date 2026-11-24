@@ -41,8 +41,8 @@ release tag, never clobber existing assets and verify actual binary readback.
 Capacity planning includes simultaneous retained files and staging/readback;
 archive/restore acceptance is distinct from publication and editorial review.
 
-Incremental work compares retained snapshot identities and applies explicit UTC
-case-date filters. It cannot reconstruct missing historical inputs or infer
+Incremental work compares retained snapshot identities and applies explicit reported
+filing-date filters. It cannot reconstruct missing historical inputs or infer
 unsearched negative results. Missing/corrupt replay inputs fail explicitly.
 
 ## Consequences

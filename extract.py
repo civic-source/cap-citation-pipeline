@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from annotation_writer import write_annotations as _write_annotations
+from search_coverage import build_search_coverage, declared_cohort, require_new_coverage_path, write_search_coverage
 
 
 COURTLISTENER_SEARCH_URL = "https://www.courtlistener.com/api/rest/v4/search/"
@@ -298,6 +299,7 @@ def process_sections(
     delay_s: float = REQUEST_DELAY_S,
 ) -> dict[str, dict[str, Any]]:
     """Process a list of (title, section) tuples and return annotation data with USCT-002 outcome metadata."""
+    declared_cohort(sections)
     results: dict[str, dict[str, Any]] = {}
     total = len(sections)
 
@@ -309,13 +311,6 @@ def process_sections(
         status = outcome.get("status", "failed")
         count = int(outcome.get("count", 0) or 0)
         raw_results = outcome.get("results", [])
-
-        if status == "success-empty":
-            if (i + 1) % 50 == 0:
-                print(f"  [{i+1}/{total}] No cases for {title} U.S.C. § {section}")
-            if delay_s > 0:
-                time.sleep(delay_s)
-            continue
 
         cases = [
             build_case_annotation(r, retrieval_query, retrieved_at)
@@ -334,7 +329,11 @@ def process_sections(
             "cases": cases,
         }
 
-        print(f"  [{i+1}/{total}] {title} U.S.C. § {section}: {count} cases ({status})")
+        if status == "success-empty":
+            if (i + 1) % 50 == 0:
+                print(f"  [{i+1}/{total}] No cases for {title} U.S.C. § {section}")
+        else:
+            print(f"  [{i+1}/{total}] {title} U.S.C. § {section}: {count} cases ({status})")
         if delay_s > 0:
             time.sleep(delay_s)
 
@@ -382,6 +381,7 @@ def main() -> None:
     parser.add_argument("--full", action="store_true", help="Process all sections")
     parser.add_argument("--output", type=str, default="./annotations", help="Output directory")
     parser.add_argument("--max-cases", type=int, default=10, help="Max cases per section")
+    parser.add_argument("--coverage-out", type=Path, help="Save an exclusive acquisition-coverage JSON receipt")
     parser.add_argument("--dry-run", action="store_true", help="Run without writing YAML files")
     args = parser.parse_args()
 
@@ -402,19 +402,24 @@ def main() -> None:
         print("No sections to process. Use --repo or --sample.", file=sys.stderr)
         sys.exit(1)
 
+    if args.coverage_out:
+        require_new_coverage_path(args.coverage_out)
     print(f"Processing {len(sections)} sections...")
     results = process_sections(sections, args.max_cases)
 
-    if results:
+    if args.coverage_out:
+        write_search_coverage(build_search_coverage(sections, results), args.coverage_out)
+    sidecar_results = {key: data for key, data in results.items() if data.get("status") != "success-empty"}
+    if sidecar_results:
         output_dir = Path(args.output)
         if args.dry_run:
-            print(f"\n[dry-run] Would write {len(results)} annotation files to {output_dir}/")
+            print(f"\n[dry-run] Would write {len(sidecar_results)} annotation files to {output_dir}/")
         else:
-            written = write_annotations(results, output_dir)
+            written = write_annotations(sidecar_results, output_dir)
             print(f"\nWrote {written} annotation files to {output_dir}/")
 
         print("\nTop 10 most-cited sections:")
-        sorted_results = sorted(results.items(), key=lambda x: x[1].get("totalCases", 0), reverse=True)
+        sorted_results = sorted(sidecar_results.items(), key=lambda x: x[1].get("totalCases", 0), reverse=True)
         for key, data in sorted_results[:10]:
             print(f"  {key}: {data.get('totalCases', 0):,} cases ({data.get('status', 'unknown')})")
     else:

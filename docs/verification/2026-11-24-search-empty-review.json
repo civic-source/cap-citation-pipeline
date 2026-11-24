@@ -1,0 +1,44 @@
+{
+  "base_revision": "1e9ab73cb8df5d45e3e475bc61bec10066ae7e13",
+  "model": "google/gemini-3.1-pro-preview",
+  "finish_reason": "stop",
+  "decision": "APPROVE",
+  "diff_sha256": "6fdc8e3aadf91cd9fc2408b52fcf527dfd812ab652ed17cddb46a49ea4e214c9",
+  "prompt_sha256": "1b22f6e3b6de6f27f692c45569670cc57c355e6078c0189c591de2ec781cb018",
+  "request_id": "gen-1795547190-rmNqAMO7HdRSHVmVrhz2",
+  "usage": {
+    "prompt_tokens": 7378,
+    "completion_tokens": 1406,
+    "total_tokens": 8784,
+    "cost": 0.031628,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.031628,
+      "upstream_inference_prompt_cost": 0.014756,
+      "upstream_inference_completions_cost": 0.016872
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 870,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "files": {
+    "annotation_writer.py": "b004bdae2041d743c58a43ad8b0e1a4c3c73fa6fa5bd68cb20048cdbae1ad1c7",
+    "docs/decisions/0001-retained-precedent-sources.md": "232c94ba41dd7ca7475bf6fa9687c9be0ab09a0c2fe5055d325eb2c0635ea9e3",
+    "docs/specs/courtlistener-bulk.md": "b43fc835c27f02ab7f61a9a1d1d7353713e9b1e3c5d6345c320d915322cb65b0",
+    "extract.py": "185826695a76c767e462f0450a616673b57548db53f59e7dd61a16b72f0d12ba",
+    "tests/test_extract.py": "e2e33c4afc98eaf6d284b573be2b3e2e766d9e9554fb4eabb2c91905c5514f84",
+    "docs/data/search-coverage.md": "65d3d275f80d7307be7c934bd0a6f6c9cff91aa5a4d2c0950c37776c64350326",
+    "docs/verification/2026-11-24-search-empty.md": "6d6e78d6e670cda647e0c6a07226d37445fdc0e6493eacbadf124712032c73cd",
+    "search_coverage.py": "bddb35ca9f0a80710fe3d1c32c5df77eaef46748b513d40d8f92e6dc79e4ca46",
+    "tests/test_search_coverage.py": "71e200250034f17046da80cb1891ce440d246d46415476d2498dfee08dc3caae"
+  },
+  "review": "**APPROVE**\n\nThe implementation comprehensively addresses the `process_sections` discarded-empty-results bug without causing side-effects on the existing annotation sidecars. The separation between acquisition observations and published content is clearly enforced.\n\n### Concrete Findings:\n\n*   **Correctness & Scope:** \n    *   The `success-empty` early `continue` in `extract.py` was correctly removed, ensuring the dictionary includes the observed outcomes. \n    *   `extract.py` safely filters out `success-empty` statuses (`sidecar_results`) before passing data to `write_annotations`, strictly fulfilling the requirement to avoid writing empty sidecars or overriding prior valid results. \n    *   The additional safety guard in `annotation_writer.py` (`return 0` on `success-empty`) provides excellent defense-in-depth against clobbering reviewed content.\n*   **Resource & Failure Handling:**\n    *   The inclusion of a pre-flight check (`require_new_coverage_path(args.coverage_out)`) in `extract.py` before executing any network search is excellent. It prevents wasting extensive API calls and time just to fail at the very end due to an existing receipt file.\n    *   `write_search_coverage` in `search_coverage.py` handles writing with exemplary atomicity (`mkstemp`, `os.link`, `fsync` on both file descriptor and parent directory). This ensures the file is fully flushed and avoids corrupted states.\n    *   Validation logic in `declared_cohort` and `_observed_outcome` tightly couples schema correctness to the runtime (e.g., throwing `ValueError` if a searched-empty status mistakenly contains a count > 0).\n*   **Provenance & Documentation:**\n    *   The UTC to \"reported filing-date\" terminology updates in `docs/decisions/0001-retained-precedent-sources.md` and `docs/specs/courtlistener-bulk.md` correctly reflect actual source ingestion behavior.\n    *   Coverage receipt enforces strict JSON literal query cohort tracking, explicitly separating partial search status from global completion logic via `globalCorpusComplete: false`.\n*   **Testing:**\n    *   All constraints (duplicate rejection, receipt limits, preserved byte-for-byte reviewed candidates, explicit failure/not_collected statuses) are backed by exhaustive failing-first test scenarios in `test_search_coverage.py`. \n\nNo modifications required. Excellent attention to atomic I/O boundaries and schema validation."
+}

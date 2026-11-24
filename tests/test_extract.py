@@ -177,7 +177,8 @@ def test_process_sections_and_write_annotations_preserves_prior_sidecar_on_failu
         search_fn=fake_search_ok,
         delay_s=0.0,
     )
-    assert list(results.keys()) == ["title-18/section-111"]
+    assert list(results.keys()) == ["title-18/section-111", "title-18/section-99999"]
+    assert results["title-18/section-99999"]["status"] == "success-empty"
 
     written = extract.write_annotations(results, tmp_path)
     assert written == 1

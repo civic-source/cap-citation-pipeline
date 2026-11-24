@@ -84,6 +84,10 @@ binds every part and complete object. No asset is replaced. Remote archival read
 back all assets before publication; restore checks each full object and replays
 before selecting the joined snapshot. Optional inventory context is retained by
 manifest ID without changing the separately selected native inventory pointer.
+Restoration also retains the independent source acquisition checkpoint from its
+verified descriptor, preserving the original observation time and headers. Later
+date-filtered captures can reuse those source bytes without another download.
+The verified acquisition checkpoint is independent of final candidate selection.
 Ordinary failures with verified rollback preserve prior selections. If rollback
 durability fails or another writer replaces the pointer, an explicit
 `selection outcome unknown` error requires operator reconciliation; inspect and

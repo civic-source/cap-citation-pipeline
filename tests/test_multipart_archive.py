@@ -10,6 +10,7 @@ from bulk_common import Blob, Err, Ok, canonical_bytes
 from bulk_store import Store
 from multipart_archive import export_joined, import_joined, inspect_joined
 from multipart_manifest import validate_index
+from joined_source import SourceSpec
 import multipart_archive
 
 
@@ -22,9 +23,11 @@ def snapshot(store, source=b"original parquet bytes", evidence=b'{"candidate":tr
     accepted(store.init())
     raw = accepted(store.put(source))
     output = accepted(store.put(evidence))
+    descriptor = SourceSpec("a" * 40, "part-00000-00000000-0000-0000-0000-000000000000-c000.gz.parquet",
+                            len(source), raw.sha256).descriptor()
     payload = {
         "schema_version": "cap.joined-snapshot/v1",
-        "source": {"blob": raw.to_dict()},
+        "source": {**descriptor, "blob": raw.to_dict(), "acquired_at": "2026-11-24T00:00:00+00:00", "headers": {}},
         "product": {"partitions": [{"blob": output.to_dict()}]},
         "producer": {"revision": None, "inventory_recipe_sha256": "f" * 64},
     }
@@ -73,7 +76,7 @@ def test_bad_transport_preserves_prior_pointer(tmp_path, mutation):
         part.rename(moved)
         part.symlink_to(moved)
     restored = Store(tmp_path / "restored", min_free_bytes=0)
-    prior, _ = snapshot(restored, b"prior", b"prior evidence")
+    prior, _ = snapshot(restored, b"prior source bytes", b"prior evidence")
     assert isinstance(import_joined(restored, Path(exported["index_path"]), replayer=replay), Err)
     assert hashlib.sha256(canonical_bytes(accepted(restored.load("joined-snapshot")))).hexdigest() == prior
 
@@ -83,7 +86,7 @@ def test_failed_domain_replay_and_expected_identity_preserve_selection(tmp_path)
     identifier, _ = snapshot(original)
     exported = accepted(export_joined(original, identifier, tmp_path / "export", part_size=8))
     restored = Store(tmp_path / "restored", min_free_bytes=0)
-    prior, _ = snapshot(restored, b"prior", b"prior evidence")
+    prior, _ = snapshot(restored, b"prior source bytes", b"prior evidence")
     failed = import_joined(restored, Path(exported["index_path"]), replayer=lambda *_: Err("bad recipe"))
     assert isinstance(failed, Err) and "bad recipe" in failed.error
     mismatch = import_joined(restored, Path(exported["index_path"]), expected_snapshot_id="0" * 64, replayer=replay)
@@ -188,7 +191,7 @@ def test_optional_inventory_is_retained_without_changing_inventory_selection(tmp
     context_id = accepted(original.accept("inventory", context, [metadata]))
     exported = accepted(export_joined(original, identifier, tmp_path / "export", part_size=8, inventory_id=context_id))
     restored = Store(tmp_path / "restored", min_free_bytes=0)
-    prior, _ = snapshot(restored, b"prior", b"prior evidence")
+    prior, _ = snapshot(restored, b"prior source bytes", b"prior evidence")
     old_blob = accepted(restored.put(b"old context"))
     old_context = {"schema_version": "cap.native-inventory-snapshot/v1", "metadata": old_blob.to_dict(),
                    "producer": {"recipe_sha256": "f" * 64}}
@@ -196,7 +199,9 @@ def test_optional_inventory_is_retained_without_changing_inventory_selection(tmp
     import bulk_pipeline
     monkeypatch.setattr(bulk_pipeline, "replay_inventory", lambda *_: Ok(None))
     if fail_selection:
-        monkeypatch.setattr(restored, "accept", lambda *_: Err("final selection failed"))
+        accept = restored.accept
+        monkeypatch.setattr(restored, "accept", lambda kind, *args: Err("final selection failed")
+                            if kind == "joined-snapshot" else accept(kind, *args))
     result = import_joined(restored, Path(exported["index_path"]), replayer=replay)
     assert isinstance(result, Err if fail_selection else Ok)
     assert accepted(restored.load("inventory")) == old_context
@@ -210,7 +215,7 @@ def test_concurrently_growing_part_is_refused_after_bounded_read(tmp_path, monke
     identifier, _ = snapshot(original)
     exported = accepted(export_joined(original, identifier, tmp_path / "export", part_size=8))
     restored = Store(tmp_path / "restored", min_free_bytes=0)
-    prior, _ = snapshot(restored, b"prior", b"prior evidence")
+    prior, _ = snapshot(restored, b"prior source bytes", b"prior evidence")
     regular = multipart_archive.regular_file
     reads = []
     @contextmanager

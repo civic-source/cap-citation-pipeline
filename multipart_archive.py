@@ -227,12 +227,21 @@ def _domain_replay(store, index, replayer):
     if inventory is not None:
         from bulk_pipeline import replay_inventory
         _checked(replay_inventory(store, inventory["payload"]))
-    _checked(replayer(store, index["snapshot"]["payload"]))
+    payload = index["snapshot"]["payload"]
+    _checked(replayer(store, payload))
+    _restore_acquisition(store, payload)
     if inventory is not None:
         payload = inventory["payload"]
         _checked(store.retain(payload, list(references(payload))))
     payload = index["snapshot"]["payload"]
     return store.accept("joined-snapshot", payload, list(references(payload)))
+
+
+def _restore_acquisition(store, payload):
+    from joined_pipeline import source_spec
+    from joined_source import acquire_source
+    source = payload["source"]
+    _checked(acquire_source(store, source=source_spec(source), fetcher=lambda *_: Ok(source)))
 
 
 def import_joined(store, index_path, *, expected_snapshot_id=None, expected_producer_revision=None, replayer=None):

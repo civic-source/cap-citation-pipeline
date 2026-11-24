@@ -49,3 +49,21 @@ def test_hash_valid_but_semantically_wrong_product_cannot_select_snapshot(tmp_pa
     result = import_joined(restored, Path(exported["index_path"]))
     assert isinstance(result, Err) and "projection differs" in result.error
     assert not (restored.root / "current-joined-snapshot.json").exists()
+
+
+def test_restored_source_can_refilter_without_another_acquisition(tmp_path):
+    spec, fetcher, _ = fixture_source(tmp_path)
+    original = Store(tmp_path / "original", min_free_bytes=0, free_provider=lambda: 100 * 1024**3)
+    captured = value(capture_joined(original, CONFIG, source=spec, fetcher=fetcher))
+    exported = value(export_joined(original, captured["snapshot_id"], tmp_path / "archive", part_size=1024))
+    restored = Store(tmp_path / "restored", min_free_bytes=0, free_provider=lambda: 100 * 1024**3)
+    value(restored.init())
+    value(import_joined(restored, Path(exported["index_path"])))
+    network = []
+    def blocked_fetch(*_):
+        network.append(True)
+        return Err("network disabled")
+    result = capture_joined(restored, {**CONFIG, "since": "2000-01-01"}, source=spec, fetcher=blocked_fetch)
+    assert isinstance(result, Ok), result
+    assert not network
+    assert value(restored.load("joined-source"))["source"]["blob"] == captured["source"]

@@ -104,7 +104,11 @@ def test_real_multipart_import_preserves_prior_pointer_after_final_fsync_failure
     source = Store(tmp_path / "source", min_free_bytes=0)
     accepted(source.init())
     blob = accepted(source.put(b"raw shard bytes"))
-    payload = {"schema_version": "cap.joined-snapshot/v1", "source": {"blob": blob.to_dict()},
+    from joined_source import SourceSpec
+    descriptor = SourceSpec("a" * 40, "part-00000-00000000-0000-0000-0000-000000000000-c000.gz.parquet",
+                            blob.byte_length, blob.sha256).descriptor()
+    payload = {"schema_version": "cap.joined-snapshot/v1",
+               "source": {**descriptor, "blob": blob.to_dict(), "acquired_at": "2026-11-24T00:00:00+00:00", "headers": {}},
                "product": {"partitions": []}, "producer": {"revision": None}}
     identifier = accepted(source.accept("joined-snapshot", payload, [blob]))
     export = accepted(export_joined(source, identifier, tmp_path / "transport", part_size=8))

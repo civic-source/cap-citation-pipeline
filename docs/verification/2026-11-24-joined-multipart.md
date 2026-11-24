@@ -6,7 +6,7 @@ Base: `7f30de17fe52b2eb36d68cf871128915447279f5`.
 
 ```text
 PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q -p no:cacheprovider
-280 passed in 16.06s
+281 passed in 16.90s
 
 ruff check --select F,C901 joined*.py multipart*.py bulk_atomic.py bulk_store.py bulk_github.py tests/test_joined*.py tests/test_multipart*.py tests/test_bulk_store_atomic.py
 All checks passed!
@@ -36,6 +36,13 @@ failing-first regressions reproduced and corrected:
 - Public index files inheriting an overly permissive process umask.
 - A concurrently growing part exceeding the hashing read budget.
 - Staged output corruption escaping local publication readback.
+
+A real-Parquet restore/refilter regression also reproduced an attempted source
+redownload after recovery. Restoration retains the independently verified original
+acquisition descriptor through the existing acquisition policy, preserving its
+timestamp and headers. A subsequent capture can refilter from the recovered bytes
+with its acquisition fetcher disabled. This changes recovery metadata only; the
+validated extraction recipe and evidence bytes remain unchanged.
 
 All cases now pass. Optional native inventory context is replayed and retained
 by immutable manifest ID without changing the current inventory pointer.

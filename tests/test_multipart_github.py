@@ -238,7 +238,7 @@ def test_restore_quota_refusal_never_changes_existing_pointer(setup, tmp_path):
     options = {"runner": remote.runner, "downloader": remote.downloader}
     receipt = accepted(github.archive_joined_to_github(store, identifier, REPO, **options))
     restored = Store(tmp_path / "restored", min_free_bytes=0)
-    prior, _ = snapshot(restored, source=b"prior", evidence=b"prior")
+    prior, _ = snapshot(restored, source=b"prior source bytes", evidence=b"prior")
     before = (restored.root / "current-joined-snapshot.json").read_bytes()
     restored._quota = 1
     assert isinstance(github.restore_joined_from_github(restored, REPO, receipt["tag"], **options), Err)

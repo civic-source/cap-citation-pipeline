@@ -65,3 +65,12 @@ Top cited sections from our analysis:
 ## License
 
 Apache 2.0 (code) / CC0 (data)
+
+## Reproducible source qualification
+
+For retained bulk metadata, bounded historical candidates, disk planning and
+verified archive/recovery, use the separate standard-library `bulk.py` workflow.
+See [the operator guide](docs/data/precedent-bulk.md). It keeps candidate evidence
+separate from reviewed annotation sidecars. Check current CourtListener access
+and quota documentation before using the legacy per-section search path; a
+request delay alone does not establish compliance with all quota windows.

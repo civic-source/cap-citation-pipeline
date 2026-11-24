@@ -1,0 +1,68 @@
+{
+  "decisions": [
+    {
+      "vote_record_id": "vote-1795543030900-fjkzetk",
+      "decision": "approved",
+      "strategy": "supermajority",
+      "role_vote_counts": {
+        "approve": 7,
+        "reject": 0,
+        "abstain": 0,
+        "error": 0,
+        "unverifiable": 0
+      },
+      "option_outcome": null,
+      "operational_diversity": {
+        "reportCoverage": {
+          "reported": 0,
+          "total": 7
+        },
+        "distinctModels": 2,
+        "distinctFamilies": 2,
+        "unclassifiedSeats": 0,
+        "unresolvedSeats": 0,
+        "fallbacks": 3
+      },
+      "serving_identity_note": "Cross-family fallback: architect: assigned anthropic, attributed to google; ai_ml: assigned anthropic, attributed to google; scope_steward: assigned anthropic, attributed to google. Serving-model reports 0/7; unreported serving identities are UNMEASURED. Model/family counts include operational attribution."
+    },
+    {
+      "vote_record_id": "vote-1795543025982-rp833g3",
+      "decision": "approved",
+      "strategy": "supermajority",
+      "role_vote_counts": {
+        "approve": 3,
+        "reject": 0,
+        "abstain": 0,
+        "error": 0,
+        "unverifiable": 0
+      },
+      "option_outcome": {
+        "tally": [
+          {
+            "option": "Pinned official joined JSONL sample",
+            "count": 3
+          }
+        ],
+        "leadingOption": "Pinned official joined JSONL sample",
+        "leadingShare": 1,
+        "approverCount": 3,
+        "selectedCount": 3,
+        "unattributedApprovals": 0,
+        "thresholdMet": true
+      },
+      "operational_diversity": {
+        "reportCoverage": {
+          "reported": 0,
+          "total": 3
+        },
+        "distinctModels": 2,
+        "distinctFamilies": 2,
+        "unclassifiedSeats": 0,
+        "unresolvedSeats": 0,
+        "fallbacks": 0
+      },
+      "serving_identity_note": "Serving-model reports 0/3; unreported serving identities are UNMEASURED. Model/family counts include operational attribution."
+    }
+  ],
+  "separate_project": "Merlin runtime work is separately ratified in williamzujkowski/homelab-iac."
+}

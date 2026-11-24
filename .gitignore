@@ -6,3 +6,4 @@ annotations/
 dist/
 build/
 .cache/
+.nexus-agents/

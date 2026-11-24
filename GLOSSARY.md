@@ -72,3 +72,15 @@ One of the five canonical state-machine labels applied to an issue: `needs-triag
 | Acceptance | The validated, transactional selection of outputs as the current result for a task or scope. |
 | Publication | A complete static delivery bundle selected by an immutable manifest. |
 | Legacy derived | Historical output whose original input or full production provenance is unavailable. |
+
+### Historical precedent sample
+
+An explicitly selected retained set of case/opinion records with its own source
+revision and byte identity. Complete enumeration of this sample does not imply
+coverage of the current CourtListener corpus or all court jurisdictions.
+
+### Decoded opinion evidence span
+
+A Unicode codepoint interval in a named decoded source text field, bound to a
+source blob, JSONL record, opinion identity and text hash. It is distinct from a
+raw JSON byte interval or a JavaScript UTF-16 index.

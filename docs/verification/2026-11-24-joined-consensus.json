@@ -1,0 +1,43 @@
+{
+  "jobId": "job-consensus_vote-bce2df56712df786",
+  "voteRecordId": "vote-1795548461232-guj0bg0",
+  "decision": "approved",
+  "simulateVotes": false,
+  "strategy": "supermajority",
+  "threshold": "supermajority",
+  "voteCounts": {
+    "approve": 3,
+    "reject": 0,
+    "abstain": 0,
+    "error": 0,
+    "unverifiable": 0
+  },
+  "optionOutcome": {
+    "tally": [
+      {
+        "option": "One joined shard with pinned reader in CI",
+        "count": 3
+      }
+    ],
+    "leadingOption": "One joined shard with pinned reader in CI",
+    "leadingShare": 1,
+    "approverCount": 3,
+    "selectedCount": 3,
+    "unattributedApprovals": 0,
+    "thresholdMet": true
+  },
+  "contrarianCheck": "errored",
+  "panelDiversity": {
+    "reportCoverage": {
+      "reported": 0,
+      "total": 3
+    },
+    "distinctModels": 2,
+    "distinctFamilies": 2,
+    "unclassifiedSeats": 0,
+    "unresolvedSeats": 0,
+    "fallbacks": 1
+  },
+  "panelWarning": "Cross-family fallback: architect: assigned anthropic, attributed to google. Serving-model reports 0/3; unreported serving identities are UNMEASURED. Model/family counts include operational attribution.",
+  "scope": "Exactly pinned959035282-byte historical shard, reader pin and scoped CI tests; no full current corpus/model/deployment authority."
+}

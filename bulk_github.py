@@ -63,9 +63,14 @@ def _lookup(repository, tag, runner):
     raise ValueError("GitHub release discovery exceeded its bounded history")
 
 
-def _metadata(repository, tag, runner):
-    value = _lookup(repository, tag, runner)
-    if value is None or type(value.get("draft")) is not bool or not isinstance(value.get("assets"), list) or len(value["assets"]) > 32:
+@dataclass(frozen=True)
+class ReleaseLimits:
+    max_assets: int = 32
+    max_bytes: int = MAX_ARCHIVE
+
+
+def _validate_release(value, repository, limits):
+    if value is None or type(value.get("draft")) is not bool or not isinstance(value.get("assets"), list) or len(value["assets"]) > limits.max_assets:
         raise ValueError("Missing or malformed GitHub archive release")
     if value.get("immutable") is not None and type(value["immutable"]) is not bool:
         raise ValueError("Invalid GitHub release immutability flag")
@@ -75,13 +80,43 @@ def _metadata(repository, tag, runner):
             raise ValueError("Invalid GitHub archive asset identity")
         if not isinstance(asset.get("name"), str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,200}", asset["name"]):
             raise ValueError("Invalid GitHub archive asset name")
-        if type(asset.get("size")) is not int or not 0 <= asset["size"] <= MAX_ARCHIVE or asset.get("state") != "uploaded":
+        if type(asset.get("size")) is not int or not 0 <= asset["size"] <= limits.max_bytes or asset.get("state") != "uploaded":
             raise ValueError("GitHub archive asset is oversized or incomplete")
         if asset.get("url") != f"https://api.github.com/repos/{repository}/releases/assets/{asset['id']}" or asset["name"] in names or asset["id"] in ids:
             raise ValueError("GitHub asset URL or uniqueness mismatch")
         names.add(asset["name"])
         ids.add(asset["id"])
     return value
+
+
+def _metadata(repository, tag, runner):
+    return _validate_release(_lookup(repository, tag, runner), repository, ReleaseLimits())
+
+
+def release_metadata(repository, tag, runner, *, limits=ReleaseLimits()):
+    """Enumerate the actual bounded asset set, including draft release pages."""
+    if type(limits.max_assets) is not int or not 0 < limits.max_assets <= 66:
+        raise ValueError("Invalid release asset count bound")
+    if type(limits.max_bytes) is not int or not 0 <= limits.max_bytes <= MAX_ARCHIVE:
+        raise ValueError("Invalid release asset byte bound")
+    value = _lookup(repository, tag, runner)
+    if value is None:
+        raise ValueError("Missing GitHub archive release")
+    assets = []
+    for page in range(1, 4):
+        raw = _command(runner, ["api", f"repos/{repository}/releases/{value['id']}/assets?per_page=32&page={page}"])
+        batch = load_json(raw)
+        if not isinstance(batch, list) or len(batch) > 32 or len(assets) + len(batch) > limits.max_assets:
+            raise ValueError("GitHub release assets exceed bounded enumeration")
+        assets.extend(batch)
+        if len(batch) < 32:
+            return _validate_release({**value, "assets": assets}, repository, limits)
+    raise ValueError("GitHub asset enumeration exceeded page bound")
+
+
+validate_repository = _repository
+github_command = _command
+lookup_release = _lookup
 
 
 def _tag(repository, tag, revision, runner, create=False):
@@ -235,3 +270,6 @@ def restore_from_github(store: Store, repository: str, tag: str, *, runner=run_g
             return import_snapshot(store, path, expected_snapshot_id=receipt["snapshot_id"], expected_producer_revision=receipt["producer_revision"])
     except Exception as error:
         return Err(str(error))
+
+
+verify_tag = _tag

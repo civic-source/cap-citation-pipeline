@@ -1,0 +1,149 @@
+{
+  "schema_version": "cap.joined-source-qualification/v1",
+  "observed_at": "2026-11-24T19:21:40.720090+00:00",
+  "full_source_transferred_for_qualification": false,
+  "source": {
+    "kind": "cold-parquet-shard",
+    "revision": "5d8d0d8457ef63b6463af9737da21d3badd924ad",
+    "path": "part-00030-bd7b5d85-e1bd-440b-8817-95ec234884f3-c000.gz.parquet",
+    "url": "https://huggingface.co/datasets/harvard-lil/cold-cases/resolve/5d8d0d8457ef63b6463af9737da21d3badd924ad/part-00030-bd7b5d85-e1bd-440b-8817-95ec234884f3-c000.gz.parquet",
+    "byte_length": 959035282,
+    "publisher_sha256": "f69470bb88733f2ecfafe0c7a3f4b14eb5bc828155c339310d04c9765bdb5070",
+    "publisher_git_pointer_sha1": "2190aea70f0f87d9c2306b301c4a85cd15fbc546",
+    "publication_last_modified": "2024-03-26T15:50:21.000Z",
+    "coverage": "one historical joined shard; global completeness false"
+  },
+  "bounded_footer": {
+    "byte_length": 96372,
+    "sha256": "68b71be8be55246a3330406751d34e0d5bb1eaeed792d71654eb6c6085b7e6d6",
+    "range": "bytes=958938910-959035281",
+    "status": 206,
+    "metadata_length": 96364
+  },
+  "schema": {
+    "case_id": "nullable int32",
+    "date_filed": "nullable date32",
+    "court_type": "nullable UTF-8 classification",
+    "court_id": "not exported",
+    "opinions": "nullable list of required structs",
+    "opinion_id": "nullable int32",
+    "opinion_text": "nullable UTF-8",
+    "ocr": "required boolean",
+    "per_curiam": "required boolean",
+    "codec": "GZIP",
+    "maximum_cell_bytes": "unmeasured; footer does not bound individual cell size",
+    "nullable_missing_text_or_ids": "must remain explicit unresolved observations",
+    "row_group_statistics": "all groups include federal types and wide historical dates; no federal/since-2023 pruning justified"
+  },
+  "parquet": {
+    "num_rows": 250162,
+    "num_row_groups": 8,
+    "compressed_column_bytes": 958853823,
+    "uncompressed_column_bytes": 3080793796,
+    "row_groups": [
+      {
+        "ordinal": 0,
+        "num_rows": 30453,
+        "compressed_column_bytes": 129860434,
+        "uncompressed_column_bytes": 419928803
+      },
+      {
+        "ordinal": 1,
+        "num_rows": 29880,
+        "compressed_column_bytes": 129716629,
+        "uncompressed_column_bytes": 418496737
+      },
+      {
+        "ordinal": 2,
+        "num_rows": 35128,
+        "compressed_column_bytes": 129585542,
+        "uncompressed_column_bytes": 413756680
+      },
+      {
+        "ordinal": 3,
+        "num_rows": 35997,
+        "compressed_column_bytes": 128826878,
+        "uncompressed_column_bytes": 413648950
+      },
+      {
+        "ordinal": 4,
+        "num_rows": 36799,
+        "compressed_column_bytes": 129286805,
+        "uncompressed_column_bytes": 413290419
+      },
+      {
+        "ordinal": 5,
+        "num_rows": 31096,
+        "compressed_column_bytes": 130191894,
+        "uncompressed_column_bytes": 421187627
+      },
+      {
+        "ordinal": 6,
+        "num_rows": 29066,
+        "compressed_column_bytes": 128738885,
+        "uncompressed_column_bytes": 415706001
+      },
+      {
+        "ordinal": 7,
+        "num_rows": 21743,
+        "compressed_column_bytes": 52646756,
+        "uncompressed_column_bytes": 164778579
+      }
+    ]
+  },
+  "license": {
+    "data": "CC0-1.0 per official pinned dataset card",
+    "exporter_code": "MIT per official cold-cases-export LICENSE; separate from data"
+  },
+  "native_gap": {
+    "observed_object_count": 1111,
+    "latest_common_date": "2026-09-30",
+    "opinion_contents_objects_found": 0,
+    "core_compressed_bytes": 62864349188,
+    "schema_byte_length": 555339,
+    "schema_sha256": "c43db7879ecb64a79089db5a12467c4f218b195064e787b943878be947aa061f",
+    "exporter_path_commit": "f0a44c2c3a1550ed1f572b6b78d9092338d457a2",
+    "scope": "joined historical shard does not establish complete current native content coverage"
+  },
+  "approved_limits": {
+    "source_bytes": 959035282,
+    "job_cache_bytes": 17179869184,
+    "minimum_free_bytes": 4294967296,
+    "worker_address_space_bytes": 4294967296,
+    "part_bytes": 134217728,
+    "max_distinct_part_assets": 64,
+    "index_bytes": 4194304,
+    "source_opinion_text_bytes": 4194304,
+    "product_bytes": 1073741824,
+    "sqlite_bytes": 536870912,
+    "product_partition_bytes": 33554432,
+    "pilot_source_limit_unchanged": 33554432,
+    "pilot_archive_limit_unchanged": 268435456
+  },
+  "references": {
+    "source_tree": "https://huggingface.co/api/datasets/harvard-lil/cold-cases/tree/5d8d0d8457ef63b6463af9737da21d3badd924ad?recursive=true&expand=false",
+    "data_license": "https://huggingface.co/datasets/harvard-lil/cold-cases/blob/5d8d0d8457ef63b6463af9737da21d3badd924ad/README.md",
+    "exporter_license": "https://github.com/harvard-lil/cold-cases-export/blob/8cf1352b4266a9c24e73a7d07e01de6b761f8b43/LICENSE",
+    "native_bulk_contract": "https://wiki.free.law/c/courtlistener/help/api/bulk-data/bulk-legal-data",
+    "native_inventory": "https://com-courtlistener-storage.s3.us-west-2.amazonaws.com/?list-type=2&prefix=bulk-data%2F&max-keys=1000",
+    "native_schema": "https://com-courtlistener-storage.s3.us-west-2.amazonaws.com/bulk-data/schema-2026-09-30.sql"
+  },
+  "redirect_qualification": {
+    "observed_at": "2026-11-24T19:45:12.686817+00:00",
+    "method": "HEAD",
+    "hops": [
+      {
+        "host": "huggingface.co",
+        "status": 302,
+        "content_length": "1258"
+      },
+      {
+        "host": "us.aws.cdn.hf.co",
+        "status": 200,
+        "content_length": "959035282"
+      }
+    ],
+    "source_body_bytes_transferred": 0,
+    "signed_urls_retained": false
+  }
+}

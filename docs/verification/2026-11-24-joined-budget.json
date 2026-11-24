@@ -1,0 +1,44 @@
+{
+  "schema": "cap.joined-phase-budget/v1",
+  "source_bytes": 959035282,
+  "max_derived_bytes": 1073741824,
+  "max_metadata_bytes_per_generation": 67108864,
+  "limits": {
+    "main_cache_quota": 17179869184,
+    "isolated_cache_quota": 17179869184,
+    "filesystem_free_reserve": 4294967296,
+    "required_additional_headroom": 10737418240
+  },
+  "phases": {
+    "capture_with_one_retained_generation": {
+      "main_cache": 4770197284,
+      "external_export": 0,
+      "isolated_restore": 0
+    },
+    "archive_and_serial_readback": {
+      "main_cache": 6433875638,
+      "external_export": 2099885970,
+      "isolated_restore": 0
+    },
+    "isolated_restore_and_replay": {
+      "main_cache": 4199771940,
+      "external_export": 2099885970,
+      "isolated_restore": 5843939108
+    }
+  },
+  "peak_all_project_bytes": 12143597018,
+  "already_retained_base": 2099885970,
+  "maximum_additional_over_one_old_generation": 10043711048,
+  "additional_fits_10GiB": true,
+  "assumptions": [
+    "At most one source decoding or replay worker at a time.",
+    "SQLite and decoder temporary outputs absent during export/readback.",
+    "Readback processes one<=128MiB part at a time then removes it.",
+    "Local external export retains one transport copy; no duplicate full publication copy.",
+    "Import parts and reconstructed CAS coexist; stage-to-CAS adoption is a link/unlink, not a file copy.",
+    "Replay writes at most1GiB transient evidence plus512MiB SQLite and one32MiB partition; cleanup precedes pointer selection.",
+    "Retained generations already present are measured separately in Store.capacity; no pruning.",
+    "Main and isolated caches each enforce their quota, actual filesystem reserve and staged usage repeatedly.",
+    "Source is exactly the pinned959035282-byte shard; a different larger source needs a new budget."
+  ]
+}

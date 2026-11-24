@@ -215,3 +215,17 @@ def test_initialization_rejects_linked_cache_directories(tmp_path: Path):
     (cache / "objects").symlink_to(outside, target_is_directory=True)
     assert isinstance(Store(cache).init(), Err)
     assert list(outside.iterdir()) == []
+
+
+def test_retain_verifies_immutable_manifest_without_selecting_any_pointer(tmp_path):
+    store = Store(tmp_path, min_free_bytes=0)
+    assert isinstance(store.init(), Ok)
+    blob = store.put(b"context").value
+    payload = {"context": blob.to_dict()}
+    kept = store.retain(payload, [blob])
+    assert isinstance(kept, Ok), kept
+    assert not list(tmp_path.glob("current-*.json"))
+    assert store.load("inventory", kept.value).value == payload
+    store.path(blob).write_bytes(b"corrupt")
+    assert isinstance(store.retain(payload, [blob]), Err)
+    assert not list(tmp_path.glob("current-*.json"))

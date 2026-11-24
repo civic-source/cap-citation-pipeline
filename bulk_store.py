@@ -10,6 +10,7 @@ from typing import Literal
 from uuid import uuid4
 
 from bulk_common import Blob, Err, Ok, Result, canonical_bytes, load_json
+from bulk_atomic import discard_owned, replace_pointer, retain_manifest, selection_lock
 
 _MAX_SAFE = (1 << 53) - 1
 _MANIFEST_LIMIT = 4 * 1024**2
@@ -268,34 +269,46 @@ class Store:
         if isinstance(capacity, Err):
             raise ValueError(capacity.error)
         staged = self._stage(content)
+        identity = staged.lstat()
+        selected = False
         try:
-            with self._parent(staged) as (source, name), self._parent(path) as (target, destination):
+            with self._parent(staged) as (source, name), self._parent(path) as (target, destination), selection_lock(target, not immutable):
                 try:
                     existing = _read(target, destination, _MANIFEST_LIMIT)
                 except FileNotFoundError:
                     existing = None
                 if immutable:
-                    if existing is not None:
-                        if existing != content:
-                            raise ValueError("Refusing immutable manifest replacement")
+                    if not retain_manifest((source, name), (target, destination), existing, content):
                         return
-                    os.link(name, destination, src_dir_fd=source, dst_dir_fd=target, follow_symlinks=False)
-                    os.unlink(name, dir_fd=source)
                 else:
-                    os.replace(name, destination, src_dir_fd=source, dst_dir_fd=target)
+                    capacity = self.ensure_capacity(len(existing) if existing is not None else 0)
+                    if isinstance(capacity, Err):
+                        raise ValueError(capacity.error)
+                    replace_pointer((source, name), (target, destination), existing, content)
+                    selected = True
+                    return
                 os.fsync(target)
                 os.fsync(source)
+        except Exception as error:
+            if selected:
+                raise OSError("selection outcome unknown: publication acknowledgement failed") from error
+            raise
         finally:
-            self._discard(staged)
+            try:
+                with self._parent(staged) as (source, name):
+                    discard_owned(source, name, identity)
+            except Exception as error:
+                if not immutable:
+                    raise OSError("selection outcome unknown: publication staging cleanup failed") from error
+                raise
 
     def _kind(self, kind: str) -> str:
-        if kind not in ("snapshot", "inventory", "source"):
+        if kind not in ("snapshot", "inventory", "source", "joined-source", "joined-snapshot"):
             raise ValueError("Invalid artifact manifest kind")
         return kind
 
-    def accept(self, kind: Literal["snapshot", "inventory", "source"], payload: dict, references: list[Blob]) -> Result[str]:
+    def retain(self, payload: dict, references: list[Blob]) -> Result[str]:
         try:
-            self._kind(kind)
             content = canonical_bytes(payload)
             if len(content) > _MANIFEST_LIMIT or not isinstance(payload, dict):
                 raise ValueError("Manifest must be a bounded mapping")
@@ -308,12 +321,22 @@ class Store:
                     return verified
             digest = hashlib.sha256(content).hexdigest()
             self._atomic(self.root / "manifests" / f"{digest}.json", content, True)
-            self._atomic(self.root / f"current-{kind}.json", canonical_bytes({"sha256": digest}))
             return Ok(digest)
         except Exception as error:
             return Err(str(error))
 
-    def load(self, kind: Literal["snapshot", "inventory", "source"], id: str | None = None) -> Result[dict]:
+    def accept(self, kind: Literal["snapshot", "inventory", "source", "joined-source", "joined-snapshot"], payload: dict, references: list[Blob]) -> Result[str]:
+        try:
+            self._kind(kind)
+            retained = self.retain(payload, references)
+            if isinstance(retained, Err):
+                return retained
+            self._atomic(self.root / f"current-{kind}.json", canonical_bytes({"sha256": retained.value}))
+            return retained
+        except Exception as error:
+            return Err(str(error))
+
+    def load(self, kind: Literal["snapshot", "inventory", "source", "joined-source", "joined-snapshot"], id: str | None = None) -> Result[dict]:
         try:
             self._kind(kind)
             if id is None:

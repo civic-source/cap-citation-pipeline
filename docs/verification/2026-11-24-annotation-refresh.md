@@ -60,3 +60,15 @@ JS
 Observed: both `fresh` and `retained` passed the TypeScript contract. No downstream source files changed. Node/pnpm build commands are not applicable to this Python repository.
 
 Independent exact-model `google/gemini-3.1-pro-preview` real unified-diff review returned `APPROVE`, `finish_reason=stop`; source hashes and the response are in the adjacent review record. The scoped inventory/producer-integrity consensus also approved all seven role votes; model-family attribution and fallbacks are recorded honestly (not seven independent models). The maintainer delegated autonomous decisions and approved protected PR merges after checks/review. CI and merge receipts remain PR lifecycle evidence.
+
+## CI entry-point regression
+
+CI run45456340653 exposed a flat-repository import difference: `pytest` collected the new guard tests before the legacy file inserted the repository root. `python -m pytest` had the root on sys.path, so it did not reproduce that integration defect.
+
+Exact reproducer before the fix:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q -p no:cacheprovider
+```
+
+Observed: collection failed with ModuleNotFoundError for extract. A shared tests/conftest.py now supplies the same flat-CLI root under both entry points. The unchanged reproducer and the original python -m pytest command both pass all46tests; no assertions, dependencies or CI gates were weakened. Independent real-diff follow-up review approved this bootstrap file.

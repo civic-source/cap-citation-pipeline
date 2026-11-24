@@ -20,5 +20,17 @@
     "fallbacks": 3,
     "serving_model_identity": "unmeasured",
     "vote_record_id": "vote-1795543030900-fjkzetk"
+  },
+  "followup": {
+    "model": "google/gemini-3.1-pro-preview",
+    "finish_reason": "stop",
+    "decision": "APPROVE",
+    "diff_sha256": "d3d4a58b0711708713b101227042897c7ba116933127fbfe2fcd2c7b25ce4e74",
+    "prompt_sha256": "6332f825ec0fa0ed6ced39e2e0626323e899605585ad858211a7ebd4c5858846",
+    "request_id": "gen-1795543861-Yaq8NVoapPF9tKnWFSVD",
+    "files": {
+      "tests/conftest.py": "e749aab7d565256a3fc60e41d74a83665c072b0b49325ddc028217a0a60ff5d2"
+    },
+    "review": "APPROVE"
   }
 }

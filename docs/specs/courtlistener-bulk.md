@@ -25,7 +25,7 @@ full-corpus commitment.
   text representation, character spans, raw citation and subsection text.
 - Reproduce canonical products offline from retained inputs and configuration.
   Missing/tampered inputs fail without silently fetching latest replacements.
-- Treat full snapshots as snapshots. A UTC since filter selects locally retained
+- Treat full snapshots as snapshots. A reported filing-date filter selects locally retained
   case dates/refresh work; it does not imply unavailable historical deltas.
 - Export and restore complete verified bundles; retain exact producer code and
   independently verify GitHub binary readback before acknowledging archival.

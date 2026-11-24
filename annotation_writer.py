@@ -189,6 +189,8 @@ def _write_one(root: int, key: str, data, now: str, max_cases: int) -> int:
         if prior is not None and _reviewed(prior):
             print(f"Refusing to overwrite reviewed annotation: {key}", file=sys.stderr)
             return 0
+        if data.get("status") == "success-empty":
+            return 0
         replacement = _replacement(data, prior, target, now, max_cases)
         if replacement is None:
             return 0

@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-import yaml
+from annotation_writer import write_annotations as _write_annotations
 
 
 COURTLISTENER_SEARCH_URL = "https://www.courtlistener.com/api/rest/v4/search/"
@@ -370,91 +370,8 @@ def get_sections_from_repo(repo_path: str, title_filter: int | None = None) -> l
 
 
 def write_annotations(results: dict[str, dict[str, Any]], output_dir: Path) -> int:
-    """
-    Write YAML annotation files with USCT-002 fallback semantics:
-    if a refresh failed or returned empty partial results, preserve any existing
-    validated YAML sidecar on disk and record `retainedPriorSnapshot: true, isStale: true`.
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-    now = utc_now_iso()
-    written = 0
-
-    for key, data in results.items():
-        parts = key.split("/")
-        if len(parts) != 2:
-            continue
-
-        title_dir = output_dir / parts[0]
-        title_dir.mkdir(parents=True, exist_ok=True)
-
-        title_num = parts[0].replace("title-", "")
-        section_num = parts[1].replace("section-", "")
-        section_file = title_dir / f"{parts[1]}.yaml"
-
-        status = data.get("status", "success-nonempty")
-        observed_at = data.get("observedAt") or now
-        cases = data.get("cases", [])
-
-        existing: dict[str, Any] | None = None
-        if section_file.exists():
-            try:
-                loaded = yaml.safe_load(section_file.read_text(encoding="utf-8"))
-                if isinstance(loaded, dict) and isinstance(loaded.get("cases"), list):
-                    existing = loaded
-            except Exception:
-                existing = None
-
-        if status == "failed" or (status == "partial" and len(cases) == 0):
-            if existing is not None:
-                prior_synced = existing.get("lastSyncedET") or observed_at
-                refresh_status: dict[str, Any] = {
-                    "status": status,
-                    "observedAt": observed_at,
-                    "lastSuccessAt": prior_synced,
-                    "isStale": True,
-                    "retainedPriorSnapshot": True,
-                    "completedPages": data.get("completedPages", 0),
-                    "expectedPages": data.get("expectedPages", 1),
-                }
-                if data.get("failureKind"):
-                    refresh_status["failureKind"] = data["failureKind"]
-                if data.get("errorMessage"):
-                    refresh_status["errorMessage"] = data["errorMessage"]
-                existing["refreshStatus"] = refresh_status
-                with open(section_file, "w", encoding="utf-8") as f:
-                    yaml.dump(existing, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-                written += 1
-            # Never overwrite or create an empty sidecar on failed acquisition
-            continue
-
-        is_stale = status != "success-nonempty" and status != "success-empty"
-        refresh_meta: dict[str, Any] = {
-            "status": status,
-            "observedAt": observed_at,
-            "lastSuccessAt": observed_at if not is_stale else (existing.get("lastSyncedET") if existing else observed_at),
-            "isStale": is_stale,
-            "retainedPriorSnapshot": False,
-            "completedPages": data.get("completedPages", 1),
-            "expectedPages": data.get("expectedPages", 1),
-        }
-        if data.get("failureKind"):
-            refresh_meta["failureKind"] = data["failureKind"]
-        if data.get("errorMessage"):
-            refresh_meta["errorMessage"] = data["errorMessage"]
-
-        annotation = {
-            "targetSection": f"{title_num} U.S.C. § {section_num}",
-            "lastSyncedET": observed_at,
-            "totalCases": data.get("totalCases", len(cases)),
-            "refreshStatus": refresh_meta,
-            "cases": cases[:MAX_CASES_PER_SECTION],
-        }
-
-        with open(section_file, "w", encoding="utf-8") as f:
-            yaml.dump(annotation, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        written += 1
-
-    return written
+    """Write automatic annotations through the protected output boundary."""
+    return _write_annotations(results, output_dir, utc_now_iso(), MAX_CASES_PER_SECTION)
 
 
 def main() -> None:

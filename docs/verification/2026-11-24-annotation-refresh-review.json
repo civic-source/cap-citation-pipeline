@@ -1,0 +1,24 @@
+{
+  "base_revision": "f333d454b9efa0bb9e91a0c041f6aa9ef5432068",
+  "model": "google/gemini-3.1-pro-preview",
+  "finish_reason": "stop",
+  "decision": "APPROVE",
+  "diff_sha256": "981a7eab3d0d15aa8bff91c39c154497cd62315dffdbee02c4c25d67feab6ed6",
+  "prompt_sha256": "04088ac0ad8b8e20163393ed42889ee62f621a522429d3ade1088bb5e149da69",
+  "request_id": "gen-1795542842-WUKf6A3VNXrgBjMJXZdX",
+  "files": {
+    "extract.py": "70f82dfde37d9fba0b3215447a74f75b6c5394dbbde7964a42a44535b169e5fb",
+    "annotation_writer.py": "877e92f5ee9261757de930b070f0a638f9f30701aab38bf0d8cfea2db779e83f",
+    "tests/test_annotation_writer_guards.py": "b9458650baca136a83eabe89a41a2270666ae35f03890d392886d5b4e875bbb3"
+  },
+  "review": "APPROVE\n\nThe changes introduce a robust, atomic output boundary while preserving prior editorial decisions and guaranteeing explicit diagnostics on validation failure. The new writer securely handles concurrency and enforces strict data fidelity checks.\n\nA few positive observations from the review:\n1. **Atomic Publication**: The use of `os.open` with `O_EXCL` and `O_NOFOLLOW` coupled with temporary file staging and `os.replace` cleanly ensures that annotations are written atomically without overwriting concurrent states or resolving malicious symlinks.\n2. **Fail-Closed on Unreadable Data**: Throwing an `AnnotationWriteError` immediately when dealing with malformed, too large, or duplicate-key YAML ensures that corrupted state isn\u2019t silently clobbered.\n3. **TypeScript Annotations Compatibility**: Extending `refreshStatus` with `source` and `scope` retains existing schema invariants and backward compatibility for downstream consumers.\n4. **Editorial Data Integrity**: Adding an upfront check for `reviewed` extraction states gracefully bails out instead of accidentally wiping out manual editorial reviews. \n\nThe accompanying tests are comprehensive and correctly verify the hard constraints around symlinks and concurrent blocking. No remaining issues found.",
+  "consensus": {
+    "decision": "approved",
+    "role_votes": 7,
+    "rejects": 0,
+    "operational_model_families": 2,
+    "fallbacks": 3,
+    "serving_model_identity": "unmeasured",
+    "vote_record_id": "vote-1795543030900-fjkzetk"
+  }
+}
